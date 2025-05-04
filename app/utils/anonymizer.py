@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 import re
+import time
 from typing import Dict, Tuple, Any, List
 
 # Presidio imports
@@ -29,7 +30,7 @@ def get_analyzer_engine():
     })
     nlp_engine = provider.create_engine()
     
-    # Create registry with only the recognizers we definitely want
+    # Create registry with the default recognizers
     registry = RecognizerRegistry()
     return AnalyzerEngine(
         nlp_engine=nlp_engine,
@@ -58,6 +59,9 @@ def _process_text(text: str, is_anonymize: bool) -> Tuple[str, Dict[str, str]]:
     Returns:
         Tuple of (processed_text, entity_mapping)
     """
+    # Start timing
+    start_time = time.time()
+    
     if not text or not isinstance(text, str):
         return text, {}
     
@@ -79,65 +83,22 @@ def _process_text(text: str, is_anonymize: bool) -> Tuple[str, Dict[str, str]]:
         entity_mapping = {}
         processed_text = text
         
-        # First use our custom patterns for high-precision identification
-        patterns = [
-            # Email addresses
-            (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', "EMAIL"),
-            
-            # Phone numbers with country codes
-            (r'\b\+?[0-9]{1,4}[-\s][0-9]{6,10}\b', "PHONE"),
-            
-            # Addresses (very specific pattern for German addresses)
-            (r'\b[A-ZÄÖÜa-zäöüß]+(?:straße|strasse|weg|platz|allee|gasse)\s+\d+[a-zA-Z]?\b', "ADDRESS"),
-            
-            # Names (only when appears with personal context)
-            (r'\b(?:ich|mein|Ich|Mein|mir|mich)(?:\s+\w+){0,3}\s+(?:heiße|bin|name\s+ist)\s+([A-ZÄÖÜa-zäöüß]+)', "PERSON")
-        ]
-        
-        # Find matches with our custom patterns
-        matches = []
-        for pattern, entity_type in patterns:
-            for match in re.finditer(pattern, text):
-                start, end = match.span()
-                matches.append((start, end, match.group(), entity_type))
-        
-        # Sort matches by position
-        matches.sort()
-        
-        # Process matches from our patterns
-        offset = 0
-        for start, end, match_text, entity_type in matches:
-            # Skip short matches that are likely common words
-            if len(match_text) < 4 and entity_type == "PERSON":
-                continue
-                
-            logger.info(f"Found {entity_type}: {match_text}")
-            
-            # Create placeholder
-            entity_id = str(uuid.uuid4())[:8]
-            placeholder = f"<{entity_type}_{entity_id}>"
-            
-            # Update entity mapping
-            entity_mapping[placeholder] = match_text
-            
-            # Replace in text with offset adjustment
-            adjusted_start = start + offset
-            adjusted_end = end + offset
-            processed_text = processed_text[:adjusted_start] + placeholder + processed_text[adjusted_end:]
-            
-            # Update offset for subsequent replacements
-            offset += len(placeholder) - (end - start)
-        
-        # Only use Presidio as a backup for English text to catch anything our patterns missed
-        if analyzer and len(processed_text) > 20 and not any(char in 'äöüßÄÖÜ' for char in processed_text):
+        # Using only Presidio for entity detection
+        if analyzer and len(processed_text) > 5:  # Analyze text of reasonable length
             try:
-                # Use Presidio to identify PII
+                # Log timing before Presidio analysis
+                presidio_start = time.time()
+                logger.info(f"Starting Presidio analysis")
+                
+                # Use Presidio to identify PII - include all built-in entity types
                 analyzer_results = analyzer.analyze(
                     text=processed_text,
                     language="en",
-                    entities=["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION"],
-                    score_threshold=0.7  # Only high-confidence matches
+                    score_threshold=0.75  # Increased threshold to reduce false positives
                 )
+                
+                presidio_analyze_time = time.time() - presidio_start
+                logger.info(f"Presidio analysis completed in {presidio_analyze_time:.4f} seconds")
                 
                 if analyzer_results and len(analyzer_results) > 0:
                     # Create proper operator config for Presidio
@@ -145,26 +106,28 @@ def _process_text(text: str, is_anonymize: bool) -> Tuple[str, Dict[str, str]]:
                         "PERSON": OperatorConfig("replace", ""),
                         "EMAIL_ADDRESS": OperatorConfig("replace", ""),
                         "PHONE_NUMBER": OperatorConfig("replace", ""),
-                        "LOCATION": OperatorConfig("replace", "")
+                        "LOCATION": OperatorConfig("replace", ""),
+                        "NRP": OperatorConfig("replace", ""),
+                        "IP_ADDRESS": OperatorConfig("replace", ""),
+                        "DOMAIN_NAME": OperatorConfig("replace", ""),
+                        "URL": OperatorConfig("replace", "")
                     }
                     
-                    # Use Presidio anonymizer
-                    anonymized_results = anonymizer.anonymize(
-                        text=processed_text,
-                        analyzer_results=analyzer_results,
-                        operators=operators
-                    )
-                    
-                    # Process Presidio results - use our own pattern instead
+                    # Process Presidio results
                     for item in analyzer_results:
                         entity_type = item.entity_type
-                        if entity_type not in ["DATE_TIME", "NRP"]:  # Skip date/time and number detections
-                            entity_id = str(uuid.uuid4())[:8]
-                            placeholder = f"<{entity_type}_{entity_id}>"
-                            original = processed_text[item.start:item.end]
-                            processed_text = processed_text.replace(original, placeholder)
-                            entity_mapping[placeholder] = original
-                            logger.info(f"Presidio found {entity_type}: {original}")
+                        entity_id = str(uuid.uuid4())[:8]
+                        placeholder = f"<{entity_type}_{entity_id}>"
+                        original = processed_text[item.start:item.end]
+                        
+                        # Skip if already processed
+                        if original not in processed_text:
+                            continue
+                            
+                        # Replace in text
+                        processed_text = processed_text.replace(original, placeholder)
+                        entity_mapping[placeholder] = original
+                        logger.info(f"Presidio found {entity_type}: {original} (score: {item.score:.2f})")
             except Exception as e:
                 logger.warning(f"Presidio processing error: {e}")
         
@@ -173,8 +136,15 @@ def _process_text(text: str, is_anonymize: bool) -> Tuple[str, Dict[str, str]]:
             mapping_id = str(uuid.uuid4())
             logger.info(f"Created {len(entity_mapping)} mappings with ID: {mapping_id}")
             entity_mapping_store[mapping_id] = entity_mapping
+            
+            # Log total processing time
+            processing_time = time.time() - start_time
+            logger.info(f"Total anonymization processing time: {processing_time:.4f} seconds")
+            
             return processed_text, {"mapping_id": mapping_id, "entities": entity_mapping}
         
+        processing_time = time.time() - start_time
+        logger.info(f"No entities found. Processing completed in {processing_time:.4f} seconds")
         return text, {}
     
     else:
@@ -223,6 +193,10 @@ def _process_text(text: str, is_anonymize: bool) -> Tuple[str, Dict[str, str]]:
                             break
                     if replaced:
                         break
+        
+        # Log total processing time
+        processing_time = time.time() - start_time
+        logger.info(f"Total deanonymization processing time: {processing_time:.4f} seconds")
         
         return processed_text, {}
 
@@ -297,6 +271,7 @@ def anonymize_data(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Dict
     Returns:
         Tuple of (anonymized_data, entity_mappings)
     """
+    total_start_time = time.time()
     logger.info("Starting anonymization process")
     
     # Process each part of the data structure
@@ -313,7 +288,6 @@ def anonymize_data(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Dict
     
     # Log mapping summary
     mapping_count = sum(1 for m in entity_mappings.values() if m)
-    logger.info(f"Anonymization complete. Found {mapping_count} mappings with ID: {global_mapping_id}")
     
     # Make a simple summary of what was anonymized
     if mapping_count > 0:
@@ -322,6 +296,9 @@ def anonymize_data(data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Dict
                 for placeholder, original in mapping_data["entities"].items():
                     entity_type = placeholder.split("_")[0].strip("<")
                     logger.info(f"Anonymized {entity_type}: {original} -> {placeholder}")
+    
+    total_time = time.time() - total_start_time
+    logger.info(f"Anonymization complete. Found {mapping_count} mappings with ID: {global_mapping_id}. Total time: {total_time:.4f} seconds")
     
     return anonymized_data, entity_mappings
 
@@ -335,6 +312,7 @@ def deanonymize_data(data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Deanonymized data
     """
+    total_start_time = time.time()
     logger.info("Starting deanonymization process")
     
     # Extract mapping ID if present
@@ -358,5 +336,6 @@ def deanonymize_data(data: Dict[str, Any]) -> Dict[str, Any]:
     if "metadata" in deanonymized_data and "privacy_mapping_id" in deanonymized_data["metadata"]:
         del deanonymized_data["metadata"]["privacy_mapping_id"]
     
-    logger.info("Deanonymization complete")
+    total_time = time.time() - total_start_time
+    logger.info(f"Deanonymization complete. Total time: {total_time:.4f} seconds")
     return deanonymized_data 
