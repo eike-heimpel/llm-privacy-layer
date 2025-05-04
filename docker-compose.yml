@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  privacy-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./app:/app/app
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
