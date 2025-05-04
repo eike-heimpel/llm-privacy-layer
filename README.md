@@ -23,13 +23,28 @@ Privacy Container is a FastAPI-based application that acts as a middleware betwe
 
 - Built with FastAPI for high performance
 - Uses Microsoft Presidio for robust PII detection and anonymization
-- Includes custom patterns for improved detection accuracy
+- Configurable confidence threshold for PII detection
 - Maintains a mapping between original data and anonymized placeholders
-- Provides detailed logging for troubleshooting
+- Provides detailed logging with performance metrics
 - Docker containerized for easy deployment
+
+## Entity Types Detected
+
+The service currently detects the following types of sensitive information:
+
+- Person names
+- Email addresses
+- Phone numbers
+- Locations
+- Dates and times
+- IP addresses
+- Domain names
+- URLs
+- Numeric patterns (NRP)
 
 ## Requirements
 
+- Python 3.10+
 - Docker and Docker Compose (for containerized deployment)
 - OpenWebUI with filter support
 
@@ -43,7 +58,13 @@ Privacy Container is a FastAPI-based application that acts as a middleware betwe
    cd privacy-container
    ```
 
-2. Build and start the container:
+2. Create a `.env` file based on the `.env.example` template:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. Build and start the container:
    ```bash
    docker-compose up -d
    ```
@@ -79,6 +100,29 @@ Privacy Container is a FastAPI-based application that acts as a middleware betwe
 - `POST /api/outlet`: Processes model responses and deanonymizes placeholders
 - `GET /health`: Health check endpoint
 
+## Performance
+
+The service is designed for minimal latency:
+- Typical anonymization processing time: ~0.2 seconds for complex prompts
+- Typical deanonymization processing time: <0.001 seconds
+
+## Configuration
+
+### Environment Variables
+
+- `LOG_LEVEL`: Set logging level (default: INFO)
+- `REMOTE_HOST`: For deployment script, the remote server hostname
+- `REMOTE_USER`: For deployment script, the remote server username
+- `REMOTE_DIR`: For deployment script, the remote directory path
+
+### Code Configuration
+
+The following settings can be adjusted in the code:
+
+- **Confidence Threshold**: Currently set to 0.75 (in `anonymizer.py`). Higher values (e.g., 0.9) reduce false positives but may miss some PII. Lower values (e.g., 0.5) catch more potential PII but increase false positives.
+- **Entity Types**: The specific types of PII to detect and anonymize can be modified in the `operators` dictionary.
+- **Skip Terms**: Common terms that should never be treated as PII.
+
 ## Deployment
 
 For deployment to a home server, a convenience script is included:
@@ -87,18 +131,19 @@ For deployment to a home server, a convenience script is included:
 ./deploy-to-homeserver.sh
 ```
 
-Update the configuration variables in this script to match your environment.
-
-## Configuration
-
-Configuration options are available via environment variables:
-
-- `LOG_LEVEL`: Set logging level (default: INFO)
+The script uses environment variables from your `.env` file for configuration.
 
 ## Security Considerations
 
 - By default, CORS is configured to allow all origins. In production, restrict this to your OpenWebUI URL.
 - The service currently maintains anonymization mappings in memory. For production use, consider implementing a more persistent storage solution.
+- No PII is stored permanently - mappings exist only for the duration of the request/response cycle.
+
+## Troubleshooting
+
+- Check logs for detailed information about detected entities and processing times
+- If too many false positives are detected, increase the confidence threshold
+- If important PII is being missed, decrease the confidence threshold
 
 ## License
 
