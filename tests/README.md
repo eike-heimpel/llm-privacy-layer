@@ -41,14 +41,11 @@ To use this feature, set your OpenRouter configuration in the `.env` file:
 # In .env file
 OPENROUTER_API_KEY=your_key_here
 EVAL_MODEL=google/gemini-2.0-flash-001
-SITE_URL=https://example.com
-SITE_NAME=Privacy Container Tests
 ```
 
 ## Configuration
 
 All configuration is in the `.env` file, which is automatically loaded by Docker Compose:
 - OpenRouter API key and model selection
-- Site information for OpenRouter API
 
 The test results location is configured in the docker-compose.test.yml file. 
