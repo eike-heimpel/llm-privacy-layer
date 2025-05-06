@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    python -m spacy download en_core_web_sm && \
+    pip install pytest openai requests
+
+# Copy application files
+COPY app/ /app/app/
+COPY tests/ /app/tests/
+
+# Set environment variables for testing
+ENV PYTHONPATH=/app
+
+# Default command
+CMD ["pytest", "tests/utils/test_anonymizer.py", "-v"] 
