@@ -11,8 +11,6 @@ RESULTS_FILE = os.environ['TEST_RESULTS_FILE']
 # OpenRouter API configuration
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
 EVAL_MODEL = os.environ.get('EVAL_MODEL', 'google/gemini-2.0-flash-001')
-SITE_URL = os.environ.get('SITE_URL', 'https://example.com')
-SITE_NAME = os.environ.get('SITE_NAME', 'Privacy Container Tests')
 
 # Initialize results file
 def setup_module():
@@ -65,11 +63,7 @@ def evaluate_with_llm(conversation):
             model=EVAL_MODEL,
             messages=[
                 {"role": "user", "content": prompt}
-            ],
-            headers={
-                "HTTP-Referer": SITE_URL,
-                "X-Title": SITE_NAME
-            }
+            ]
         )
         
         # Return the LLM's assessment
