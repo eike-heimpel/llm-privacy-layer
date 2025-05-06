@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  privacy-container-test:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.test
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./results:/app/results
+    env_file:
+      - .env
+    environment:
+      - LOG_LEVEL=INFO
+      - TEST_RESULTS_FILE=/app/results/test_results.md
+    command: pytest tests/utils/test_anonymizer.py -v
