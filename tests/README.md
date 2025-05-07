@@ -1,51 +1,62 @@
-# Anonymizer Tests
+# LLM Privacy Layer Tests
 
-Simple tests for the Privacy Container anonymizer functionality.
+This directory contains tests for the LLM Privacy Layer application.
 
 ## Running Tests
 
-The tests use Docker to ensure a consistent environment. Run them using:
+To run all tests:
 
 ```bash
-# From the project root directory
 make test
 ```
 
-The test results will be saved to a markdown file (`results/test_results.md`) for easy reading.
+This will:
+1. Build and run the test container
+2. Execute all tests with pytest
+3. Generate test results in `test_reports/test_results.md`
 
-To clean up test resources:
-```bash
-make test-clean
-```
+## Test Structure
 
-## Test Cases
+The tests are organized as follows:
 
-The tests verify the following:
+- `utils/test_anonymizer.py`: Tests for the anonymizer module
+  - Basic anonymization tests
+  - Deanonymization tests
+  - Custom entities tests
+  - Entity-specific threshold tests
+  - Skip terms tests
 
-1. Basic anonymization: Checks if names and emails are properly anonymized
-2. Deanonymization: Verifies that anonymized data can be restored to its original form
-3. Complex conversations: Tests handling of multiple messages with different types of PII
-4. Non-PII content: Ensures that content without PII remains unchanged
+## Key Tests
+
+### Basic Functionality Tests
+- **test_basic_anonymization**: Tests that basic PII is detected and anonymized
+- **test_deanonymization**: Tests that anonymized content can be properly restored
+- **test_non_pii_content**: Tests that non-PII content is preserved unchanged
+
+### Advanced Feature Tests
+- **test_custom_entities**: Tests that custom entities from profiles are properly anonymized
+- **test_entity_specific_thresholds**: Tests that different thresholds for different entity types work correctly
+- **test_skip_terms**: Tests that terms in the skip_terms list are not anonymized
+
+## Adding New Tests
+
+When adding new tests:
+
+1. Add the test function to `tests/utils/test_anonymizer.py`
+2. Use the `write_to_results()` function to document test inputs/outputs
+3. Include assertions to validate the test expectations
+4. Make sure to use the standard test format:
+   ```python
+   def test_something():
+       """Test description"""
+       write_to_results("## Your Test Name\n")
+       
+       # Test code here
+       
+       # Document results
+       write_to_results(f"**Some result:**\n```\n{your_result}\n```\n")
+   ```
 
 ## LLM Evaluation
 
-For the complex conversation test, we use an LLM (Google's Gemini 2.0 Flash via OpenRouter) to evaluate the readability and clarity of the anonymized text. The LLM provides a brief assessment addressing:
-
-1. How readable/understandable the anonymized text is
-2. Any confusing parts or ambiguities
-3. Whether the context of the conversation is preserved despite anonymization
-
-To use this feature, set your OpenRouter configuration in the `.env` file:
-
-```
-# In .env file
-OPENROUTER_API_KEY=your_key_here
-EVAL_MODEL=google/gemini-2.0-flash-001
-```
-
-## Configuration
-
-All configuration is in the `.env` file, which is automatically loaded by Docker Compose:
-- OpenRouter API key and model selection
-
-The test results location is configured in the docker-compose.test.yml file. 
+Some tests use the `evaluate_with_llm()` function to get qualitative feedback on anonymization quality. This requires an OpenRouter API key in the environment variables. 

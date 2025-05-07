@@ -53,3 +53,9 @@ htmlcov/
 
 # Local deployment scripts with sensitive info
 deploy-local.sh 
+
+# test reports
+test_reports/*
+!test_reports/example_test_results.md
+
+profiles.yaml
