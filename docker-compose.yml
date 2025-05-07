@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  privacy-container:
+  llm-privacy-layer:
     build:
       context: .
       dockerfile: Dockerfile

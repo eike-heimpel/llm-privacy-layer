@@ -1,5 +1,5 @@
 # Configuration for anonymizer tests
-RESULTS_DIR := results
+RESULTS_DIR := test_reports
 RESULTS_FILE := test_results.md
 
 # Available targets:

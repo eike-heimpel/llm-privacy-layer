@@ -1,17 +1,17 @@
 version: '3'
 
 services:
-  privacy-container-test:
+  llm-privacy-layer-test:
     build:
       context: .
       dockerfile: tests/Dockerfile.test
     volumes:
       - ./app:/app/app
       - ./tests:/app/tests
-      - ./results:/app/results
+      - ./test_reports:/app/test_reports
     env_file:
       - .env
     environment:
       - LOG_LEVEL=INFO
-      - TEST_RESULTS_FILE=/app/results/test_results.md
+      - TEST_RESULTS_FILE=/app/test_reports/test_results.md
     command: pytest tests/utils/test_anonymizer.py -v

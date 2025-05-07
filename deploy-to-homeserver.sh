@@ -13,7 +13,7 @@ fi
 # Use environment variables with defaults as fallback
 REMOTE_HOST="${REMOTE_HOST:-localhost}"
 REMOTE_USER="${REMOTE_USER:-user}"
-REMOTE_DIR="${REMOTE_DIR:-/tmp/privacy-container}"
+REMOTE_DIR="${REMOTE_DIR:-/tmp/llm-privacy-layer}"
 SOURCE_DIR="$(pwd)"
 
 # Colors for output

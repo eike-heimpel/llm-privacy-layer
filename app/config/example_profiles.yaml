@@ -1,0 +1,79 @@
+version: 1
+profiles:
+  default:
+    thresholds:
+      PERSON: 0.85
+      EMAIL_ADDRESS: 0.75
+      PHONE_NUMBER: 0.75
+      LOCATION: 0.90
+      DATE_TIME: 0.95
+      NRP: 0.85
+      IP_ADDRESS: 0.75
+      DOMAIN_NAME: 0.80
+      URL: 0.80
+      DEFAULT: 0.85
+    custom_entities:
+      PERSON:
+        - "John Doe"
+        - "Jane Smith"
+      ORGANIZATION:
+        - "Acme Corporation"
+        - "Example Company LLC"
+      LOCATION:
+        - "123 Main Street, Anytown, USA"
+        - "456 Elm Avenue, Springfield"
+      PHONE_NUMBER:
+        - "+1 (555) 123-4567"
+        - "800-555-0100"
+      EMAIL_ADDRESS:
+        - "contact@example.com"
+        - "support@testcompany.org"
+    fuzzy_match:
+      enabled: true
+      thresholds:
+        PERSON: 85
+        ORGANIZATION: 90
+        LOCATION: 85
+        DEFAULT: 80
+    skip_terms:
+      - "en"
+      - "de"
+      - "en-US"
+      - "en-GB"
+      - "de-DE"
+      - "monday"
+      - "tuesday"
+      - "wednesday"
+      - "thursday"
+      - "friday"
+      - "saturday"
+      - "sunday"
+      - "january"
+      - "february"
+      - "march"
+      - "april"
+      - "may"
+      - "june"
+      - "july"
+      - "august"
+      - "september"
+      - "october"
+      - "november"
+      - "december"
+      - "user"
+      - "assistant"
+      - "system"
+
+  high_security:
+    description: "Profile with lower thresholds to catch more potential PII"
+    thresholds:
+      DEFAULT: 0.6
+    custom_entities:
+      PERSON:
+        - "John Doe"
+        - "Jane Smith"
+    fuzzy_match:
+      enabled: true
+      thresholds:
+        DEFAULT: 75
+    skip_terms: [] 

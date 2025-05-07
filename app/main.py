@@ -13,15 +13,15 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="Privacy Container",
-    description="API for anonymizing and deanonymizing data for OpenWebUI",
+    title="LLM Privacy Layer",
+    description="A standalone privacy filter API that anonymizes sensitive information in data before it's sent to language models and deanonymizes responses",
     version="0.1.0",
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this to your OpenWebUI URL
+    allow_origins=["*"],  # In production, restrict this to your application URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
