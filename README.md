@@ -45,9 +45,54 @@ After setup, integrate with your LLM application:
 
 This way, sensitive information never reaches the LLM provider's systems.
 
-![Privacy Layer Data Flow](docs/images/privacy_layer_flow.png)
+```mermaid
+%%{init: {'theme': 'default', 'themeVariables': { 'primaryColor': '#b5e853', 'primaryTextColor': '#151515', 'primaryBorderColor': '#b5e853', 'lineColor': '#b5e853', 'secondaryColor': '#2a2a2a', 'tertiaryColor': '#151515'}}}%%
 
-> **Note:** The diagram is also available as a [Mermaid](https://mermaid-js.github.io/mermaid/) file at [docs/images/privacy_layer_flow.mmd](docs/images/privacy_layer_flow.mmd).
+flowchart LR
+    subgraph Your["Your Environment"]
+        App["Your Application"]
+        User(("User"))
+    end
+
+    subgraph Private["Privacy Layer"]
+        Inlet["Privacy Layer<br>(inlet)"]
+        Outlet["Privacy Layer<br>(outlet)"]
+        
+        %% Hidden node for the lock icon
+        InvisNode1["🔒"]
+        style InvisNode1 fill:none,stroke:none
+        
+        %% Connection between Inlet and Outlet to show they share data
+        Inlet -.->|"Mapping Storage"| InvisNode1
+        InvisNode1 -.->|"Mapping Storage"| Outlet
+    end
+
+    subgraph External["External Provider"]
+        LLM["LLM Provider"]
+    end
+
+    %% Data flow - fix labels to avoid list interpretation
+    App -->|"① Send data with PII"| Inlet
+    Inlet -->|"② Return anonymized data ✓"| App
+    App -->|"③ Send anonymized data ✓"| LLM
+    LLM -->|"④ Return response with placeholders"| App
+    App -->|"⑤ Send response with placeholders"| Outlet
+    Outlet -->|"⑥ Return deanonymized response"| App
+    App -->|"⑦ Show safe response"| User
+
+    %% Styling
+    classDef appNode fill:#b5e853,stroke:#333,stroke-width:1px,color:#1a1a1a;
+    classDef privacyNode fill:#4CAF50,stroke:#333,stroke-width:1px,color:white;
+    classDef externalNode fill:#FF5722,stroke:#333,stroke-width:1px,color:white;
+    classDef userNode fill:#2196F3,stroke:#333,stroke-width:1px,color:white;
+    
+    class App appNode;
+    class Inlet,Outlet privacyNode;
+    class LLM externalNode;
+    class User userNode;
+```
+
+> **Note:** The diagram source is also available as a separate file at [docs/images/privacy_layer_flow.mmd](docs/images/privacy_layer_flow.mmd).
 
 ## Features
 
