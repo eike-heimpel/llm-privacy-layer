@@ -11,8 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install dependencies with specific order for better compatibility
+# Also download the necessary spaCy models
 RUN pip install --no-cache-dir -r requirements.txt && \
-    python -m spacy download en_core_web_sm
+    python -m spacy download en_core_web_lg && \
+    python -m spacy download de_core_news_lg
 
 # Copy the application
 COPY . .

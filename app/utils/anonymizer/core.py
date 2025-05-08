@@ -25,17 +25,30 @@ logger = logging.getLogger(__name__)
 
 # Initialize Presidio analyzer engine
 def get_analyzer_engine():
-    """Initialize and return the Presidio analyzer engine."""
+    """Initialize and return the Presidio analyzer engine based on config."""
     provider = NlpEngineProvider(nlp_configuration={
         "nlp_engine_name": "spacy",
-        "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}]
+        "models": config.spacy_models # Use models from config
     })
     nlp_engine = provider.create_engine()
     registry = RecognizerRegistry()
+    
+    # Load predefined recognizers. These will be aware of all NLP capabilities
+    # (e.g., 'en' and 'de') from the nlp_engine.
+    registry.load_predefined_recognizers(nlp_engine=nlp_engine)
+    
+    # TODO: Add any custom recognizers or adjust existing ones here,
+    # especially for German (e.g., context words, German-specific patterns).
+
+    # Determine supported languages from the configured models
+    supported_languages = list(set(model["lang_code"] for model in config.spacy_models))
+    
+    logger.info(f"Analyzer engine initialized with models: {config.spacy_models} and supported languages: {supported_languages}")
+
     return AnalyzerEngine(
         nlp_engine=nlp_engine,
         registry=registry,
-        supported_languages=["en"]
+        supported_languages=supported_languages
     )
 
 # Initialize engines

@@ -165,7 +165,9 @@ The service currently detects the following types of sensitive information:
 3. Install dependencies:
    ```bash
    pip install -r requirements.txt
-   python -m spacy download en_core_web_sm
+   python -m spacy download en_core_web_lg
+   python -m spacy download de_core_news_lg
+   # (Or download the specific models you intend to use if they differ from the defaults above)
    ```
 
 4. Create your profiles configuration file:
@@ -279,6 +281,20 @@ The service is designed for minimal latency:
 - `LLM_PRIVACY_DEFAULT_PROFILE`: Name of the default profile to use (default: default)
 - `LLM_PRIVACY_CACHE_MAPPINGS`: Whether to cache mappings (default: true)
 - `LLM_PRIVACY_CACHE_TTL`: Time-to-live for cached mappings in seconds (default: 3600)
+- `LLM_PRIVACY_SPACY_MODELS_JSON`: A JSON string specifying the spaCy models to load at runtime.
+  Example: `'[{"lang_code": "en", "model_name": "en_core_web_lg"}, {"lang_code": "de", "model_name": "de_core_news_lg"}]'`
+  If not set, the application defaults to the models specified in its internal configuration (currently `en_core_web_lg` and `de_core_news_lg`), which are also the defaults downloaded during the Docker image build.
+
+  **Note on Docker Compose:** When using Docker Compose, these environment variables are typically set within your `docker-compose.yml` file for the service.
+
+  **Managing Language Models:**
+  The privacy layer can use multiple spaCy language models (e.g., for English and German) to detect PII. Here's how they are managed:
+  1.  **Model Availability (Docker Image):** The `Dockerfile` is responsible for downloading a base set of spaCy models when the Docker image is built. By default, it includes models for English (`en_core_web_lg`) and German (`de_core_news_lg`). These are the models available "out-of-the-box" within the container.
+  2.  **Model Selection (Runtime):** The `LLM_PRIVACY_SPACY_MODELS_JSON` environment variable (mentioned above) tells the application which of these *available* models to actually load and use when it starts. This allows you to activate only English, only German, or both, from the models included in the image.
+  3.  **Using a New Model Not in the Default Image:** If you need to use a spaCy model that isn't part of the default image build (e.g., a model for a different language or a different size):
+      *   First, you must add the download command for the new model (e.g., `RUN python -m spacy download your_new_model_name`) to the `Dockerfile`.
+      *   Then, rebuild the Docker image (e.g., using `docker-compose build app_service_name` or `docker build -t your_image_name .`).
+      *   Finally, update the `LLM_PRIVACY_SPACY_MODELS_JSON` environment variable (e.g., in your `docker-compose.yml` or `.env` file) to include this new model in the list of models the application should load.
 
 #### Advanced Configuration
 

@@ -1,5 +1,6 @@
 import os
 import logging
+import json # Added for parsing JSON env var
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,13 @@ class AnonymizerConfig:
         self.default_profile = "default"
         self.cache_mappings = True
         self.cache_ttl = 3600  # 1 hour
+        
+        # SpaCy models configuration
+        # Default models: upgraded English and added German
+        self.spacy_models = [
+            {"lang_code": "en", "model_name": "en_core_web_lg"},
+            {"lang_code": "de", "model_name": "de_core_news_lg"}
+        ]
         
         # Entity mapping storage configuration
         # Maximum number of mapping sets to keep in memory - controls memory usage
@@ -64,6 +72,16 @@ class AnonymizerConfig:
             except ValueError:
                 logger.warning(f"Invalid cache TTL in environment: {os.environ.get('LLM_PRIVACY_CACHE_TTL')}")
         
+        if os.environ.get("LLM_PRIVACY_SPACY_MODELS_JSON"):
+            try:
+                models_json = os.environ.get("LLM_PRIVACY_SPACY_MODELS_JSON")
+                self.spacy_models = json.loads(models_json)
+                logger.info(f"Loaded spaCy models from LLM_PRIVACY_SPACY_MODELS_JSON: {self.spacy_models}")
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in LLM_PRIVACY_SPACY_MODELS_JSON: {os.environ.get('LLM_PRIVACY_SPACY_MODELS_JSON')}")
+            except Exception as e:
+                logger.warning(f"Error loading spaCy models from environment: {e}")
+
         # Advanced configuration options
         if os.environ.get("LLM_PRIVACY_MAPPING_STORE_SIZE"):
             try:
@@ -103,7 +121,7 @@ class AnonymizerConfig:
                 logger.warning(f"Invalid cache TTL in deprecated environment variable: {os.environ.get('PRIVACY_CONTAINER_CACHE_TTL')}")
             logger.warning("Using deprecated PRIVACY_CONTAINER_CACHE_TTL environment variable. Please use LLM_PRIVACY_CACHE_TTL instead.")
                 
-        logger.info(f"Anonymizer config initialized: profile_path={self.profile_path}, default_profile={self.default_profile}")
+        logger.info(f"Anonymizer config initialized: profile_path={self.profile_path}, default_profile={self.default_profile}, spacy_models={self.spacy_models}")
 
 # Create a singleton instance
 config = AnonymizerConfig() 
