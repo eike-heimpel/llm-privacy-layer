@@ -11,6 +11,29 @@ LLM Privacy Layer is a FastAPI-based service that acts as a privacy filter for L
 - **External service architecture**: Works as a separate service that doesn't require tight integration with your application code
 - **JSON processing**: Handles any JSON structure for flexible integration
 
+## Quick Start
+
+Get up and running quickly with Docker:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/llm-privacy-layer.git
+cd llm-privacy-layer
+
+# Create configuration files (using defaults)
+cp .env.example .env
+cp app/config/example_profiles.yaml app/config/profiles.yaml
+
+# Start the service
+docker-compose up -d
+
+# Service is now running at http://localhost:8010
+```
+
+After setup, integrate with your LLM application:
+1. Send requests to `http://localhost:8010/api/inlet` before passing to LLM
+2. Send LLM responses to `http://localhost:8010/api/outlet` before showing to users
+
 ## How It Works
 
 1. Your application calls the Privacy Layer's `inlet` endpoint with the data that would normally go directly to your LLM provider
@@ -22,6 +45,10 @@ LLM Privacy Layer is a FastAPI-based service that acts as a privacy filter for L
 
 This way, sensitive information never reaches the LLM provider's systems.
 
+![Privacy Layer Data Flow](docs/images/privacy_layer_flow.png)
+
+> **Note:** The diagram is also available as a [Mermaid](https://mermaid-js.github.io/mermaid/) file at [docs/images/privacy_layer_flow.mmd](docs/images/privacy_layer_flow.mmd).
+
 ## Features
 
 - Built with FastAPI for high performance
@@ -31,6 +58,8 @@ This way, sensitive information never reaches the LLM provider's systems.
 - Provides detailed logging with performance metrics
 - Docker containerized for easy deployment
 - Runs as a standalone service without dependencies on specific LLM libraries
+- Modular architecture with separated components for improved maintainability
+- Smart cache management to prevent memory leaks
 
 ## Entity Types Detected
 
@@ -140,6 +169,56 @@ OpenWebUI has a built-in external filter feature that can be configured to use L
 - `POST /api/outlet`: Processes LLM responses and deanonymizes placeholders
 - `GET /health`: Health check endpoint
 
+### Example API Requests and Responses
+
+#### Inlet Example
+
+Request to `/api/inlet`:
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "My name is John Smith and my email is john.smith@example.com"
+    }
+  ]
+}
+```
+
+Response from `/api/inlet`:
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "My name is <PERSON_12345678> and my email is <EMAIL_87654321>"
+    }
+  ],
+  "metadata": {
+    "privacy_mapping_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+#### Outlet Example
+
+Request to `/api/outlet`:
+```json
+{
+  "response": "I understand, <PERSON_12345678>. I'll send a confirmation to <EMAIL_87654321>.",
+  "metadata": {
+    "privacy_mapping_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+Response from `/api/outlet`:
+```json
+{
+  "response": "I understand, John Smith. I'll send a confirmation to john.smith@example.com."
+}
+```
+
 ## Performance
 
 The service is designed for minimal latency:
@@ -155,6 +234,21 @@ The service is designed for minimal latency:
 - `LLM_PRIVACY_DEFAULT_PROFILE`: Name of the default profile to use (default: default)
 - `LLM_PRIVACY_CACHE_MAPPINGS`: Whether to cache mappings (default: true)
 - `LLM_PRIVACY_CACHE_TTL`: Time-to-live for cached mappings in seconds (default: 3600)
+
+#### Advanced Configuration
+
+These options can be adjusted for fine-tuning the anonymizer's behavior:
+
+- `LLM_PRIVACY_MAPPING_STORE_SIZE`: Maximum number of mapping sets to keep in memory (default: 100)
+- `LLM_PRIVACY_MIN_ENTITY_LENGTH`: Minimum length for an entity to be considered in fuzzy matching (default: 2)
+- `LLM_PRIVACY_MAX_PHRASE_WORDS`: Maximum number of words to consider in phrase matching (default: 5)
+
+For most users, the default values work well. Adjusting these is only necessary for specific use cases:
+
+- Increase `MAPPING_STORE_SIZE` for high-volume systems with many concurrent requests
+- Lower `MIN_ENTITY_LENGTH` if you need to match very short names (already set to 2 by default)
+- Increase `MAX_PHRASE_WORDS` if you have very long multi-word entities to match
+
 - `REMOTE_HOST`: For deployment script, the remote server hostname
 - `REMOTE_USER`: For deployment script, the remote server username
 - `REMOTE_DIR`: For deployment script, the remote directory path
@@ -259,3 +353,60 @@ Test results will be available in `test_reports/test_results.md`.
 
 - [Microsoft Presidio](https://github.com/microsoft/presidio) for PII detection and anonymization
 - [FastAPI](https://fastapi.tiangolo.com/) framework 
+
+## Architecture
+
+The anonymizer module is designed with a modular architecture:
+
+- **Core**: Main entry points for anonymization and deanonymization
+- **Processors**: Text processing functionality with Presidio integration
+- **Matchers**: Entity matching for both exact and fuzzy matching
+- **Store**: Efficient mapping storage with automatic cache management
+- **Recursion**: Handles complex JSON structures recursively
+- **Profiles**: Manages anonymization profiles and configurations
+
+This architecture supports:
+- Efficient handling of both short and long entity names
+- Memory-optimized storage to prevent leaks during extended use
+- Clear separation of concerns for improved maintainability
+- Extensibility for adding new languages and entity types 
+
+## Mapping Cache System
+
+### What It Does
+
+The mapping cache system is like a temporary memory that connects your original sensitive information with its anonymized placeholders. Here's what it does in simple terms:
+
+1. **Remembers Translations**: When the service replaces "John Smith" with something like "<PERSON_12345678>", it remembers this connection.
+   
+2. **Connects Requests and Responses**: When a response comes back from the LLM containing "<PERSON_12345678>", the service knows to put "John Smith" back in its place.
+
+3. **Maintains Privacy**: Your sensitive information stays in the service's temporary memory and never gets sent to the LLM provider.
+
+4. **Cleans Up After Itself**: The system automatically removes older information to keep memory usage low.
+
+### How It Works For Users
+
+You don't need to manage the cache at all - it works automatically:
+
+1. When you send data to the `inlet` endpoint, the service creates a unique ID for your request.
+2. This ID is included with the anonymized data sent back to you.
+3. When you send the LLM's response to the `outlet` endpoint, the service uses this ID to find the right mapping.
+4. Your original information is restored in the final response.
+
+### Practical Benefits
+
+- **Privacy**: Sensitive information never leaves your system
+- **Consistency**: The same personal information is always replaced and restored consistently
+- **No Setup Required**: The mapping system works out of the box
+- **Low Overhead**: The system adds minimal processing time (less than 1 millisecond for deanonymization)
+
+### Configuration Options
+
+If needed, you can adjust these settings (but defaults work well for most users):
+
+- **Cache Size**: How many different sets of mappings to keep in memory at once (default: 100)
+- **Cache Duration**: How long to keep mappings before discarding them (default: 1 hour)
+- **Cache On/Off**: Whether to use caching at all (default: enabled)
+
+You can change these with environment variables if your system processes many requests or needs to retain mappings for longer periods. 

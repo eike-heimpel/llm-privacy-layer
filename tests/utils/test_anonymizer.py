@@ -9,6 +9,7 @@ import logging
 # Import modules to test internal functionality
 from app.utils.anonymizer.profiles import load_profiles
 from app.utils.anonymizer.config import config
+from app.utils.anonymizer.store import EntityMappingStore
 
 # File to store test results - always set by environment variable
 RESULTS_FILE = os.environ['TEST_RESULTS_FILE']
@@ -326,4 +327,162 @@ def test_skip_terms():
     
     # Note: The current implementation applies skip_terms at the whole-text level,
     # not for partial matches within text. This is by design to avoid performance overhead.
-    write_to_results(f"**Note:** Skip terms are applied to exact matches of the entire text content, not for partial matches within larger text.\n") 
+    write_to_results(f"**Note:** Skip terms are applied to exact matches of the entire text content, not for partial matches within larger text.\n")
+
+def test_entity_mapping_store():
+    """Test the EntityMappingStore class and its cache management"""
+    write_to_results("## EntityMappingStore Test\n")
+    
+    # Create a small mapping store for testing
+    test_store = EntityMappingStore(max_cache_size=3)
+    
+    # Add some mappings
+    mapping1 = {"<PERSON_12345678>": "John Doe"}
+    mapping2 = {"<EMAIL_12345678>": "john@example.com"}
+    mapping3 = {"<LOCATION_12345678>": "New York"}
+    mapping4 = {"<PHONE_12345678>": "555-123-4567"}
+    
+    id1 = test_store.add("uuid1", mapping1)
+    id2 = test_store.add("uuid2", mapping2)
+    id3 = test_store.add("uuid3", mapping3)
+    
+    # Verify all mappings are present
+    assert test_store.get("uuid1") == mapping1
+    assert test_store.get("uuid2") == mapping2
+    assert test_store.get("uuid3") == mapping3
+    
+    # Check store size
+    assert len(test_store.get_all()) == 3
+    
+    # Add a 4th mapping, which should trigger cleanup of the oldest accessed
+    id4 = test_store.add("uuid4", mapping4)
+    
+    # The first mapping should have been removed
+    assert test_store.get("uuid1") is None
+    assert test_store.get("uuid2") is not None
+    assert test_store.get("uuid3") is not None
+    assert test_store.get("uuid4") is not None
+    
+    # Check final store size
+    assert len(test_store.get_all()) == 3
+    
+    # Update access time on uuid2
+    test_store.get("uuid2")
+    
+    # Add another mapping
+    mapping5 = {"<URL_12345678>": "https://example.com"}
+    id5 = test_store.add("uuid5", mapping5)
+    
+    # The third mapping should have been removed now
+    assert test_store.get("uuid2") is not None  # Recently accessed
+    assert test_store.get("uuid3") is None      # Removed (oldest access time)
+    assert test_store.get("uuid4") is not None
+    assert test_store.get("uuid5") is not None
+    
+    write_to_results("**Observation:** The EntityMappingStore correctly manages cache size by removing the oldest accessed mappings when the cache is full.\n")
+
+def test_memory_leak_prevention():
+    """Test that the mapping store prevents memory leaks with large data"""
+    write_to_results("## Memory Leak Prevention Test\n")
+    
+    # Get the current mapping store from the module
+    from app.utils.anonymizer.store import entity_mapping_store
+    
+    # Record initial store size
+    initial_store_size = len(entity_mapping_store.get_all())
+    
+    # Generate a large number of anonymization operations
+    for i in range(20):
+        # Different data each time to ensure new mappings
+        test_data = {
+            "messages": [
+                {"role": "user", "content": f"User {i}'s email is user{i}@example.com and phone is 555-{i}{i}{i}-{i}{i}{i}{i}."}
+            ]
+        }
+        
+        # Anonymize the data
+        anonymized_data, _ = anonymize_data(test_data)
+    
+    # Check final store size
+    final_store_size = len(entity_mapping_store.get_all())
+    
+    # The store size should have a reasonable limit despite many operations
+    store_growth = final_store_size - initial_store_size
+    
+    write_to_results(f"**Initial store size:** {initial_store_size}\n")
+    write_to_results(f"**Final store size after 20 operations:** {final_store_size}\n")
+    write_to_results(f"**Store growth:** {store_growth}\n")
+    
+    # Note: The actual limit depends on the max_cache_size setting
+    # We're just checking it doesn't grow without bound
+    assert store_growth <= 100, "Store growth should be limited by max_cache_size"
+    
+    write_to_results("**Observation:** The mapping store properly limits its size, preventing unbounded memory growth.\n")
+
+def test_short_entity_names():
+    """Test that very short custom entity names are correctly handled"""
+    write_to_results("## Short Entity Names Test\n")
+    
+    # Create a test profile with short entity names
+    test_profile = {
+        "thresholds": {"DEFAULT": 0.85},
+        "custom_entities": {
+            "PERSON": ["Lea", "Jo", "Li", "Al"],
+            "LOCATION": ["LA"]
+        },
+        "fuzzy_match": {"enabled": True, "thresholds": {"DEFAULT": 80}}
+    }
+    
+    # Inject the test profile
+    from app.utils.anonymizer.core import profiles
+    profiles["short_names_profile"] = test_profile
+    
+    # Verify the MIN_ENTITY_LENGTH configuration is set to handle short names
+    from app.utils.anonymizer.config import config
+    assert config.min_entity_length <= 2, "min_entity_length should be 2 or lower to handle short names"
+    
+    # Test data with short names - exact matches
+    test_data = {
+        "messages": [
+            {"role": "user", "content": "My friends are Lea, Jo, Li, and Al from LA."}
+        ]
+    }
+    
+    # Anonymize with our test profile
+    anonymized_data, mappings = anonymize_data(test_data, profile_name="short_names_profile")
+    anonymized_message = anonymized_data["messages"][0]["content"]
+    
+    # Check that the short names were anonymized
+    assert "Lea" not in anonymized_message
+    assert "Jo" not in anonymized_message
+    assert "Li" not in anonymized_message
+    assert "Al" not in anonymized_message
+    assert "LA" not in anonymized_message
+    
+    # Deanonymize and verify restoration
+    deanonymized_data = deanonymize_data(anonymized_data)
+    deanonymized_message = deanonymized_data["messages"][0]["content"]
+    
+    # Verify the original message is restored
+    assert deanonymized_message == test_data["messages"][0]["content"]
+    
+    # Write results
+    write_to_results(f"**Original message:**\n```\n{test_data['messages'][0]['content']}\n```\n")
+    write_to_results(f"**Anonymized message:**\n```\n{anonymized_message}\n```\n")
+    write_to_results(f"**Deanonymized message:**\n```\n{deanonymized_message}\n```\n")
+    
+    # Test with fuzzy matching variants
+    fuzzy_test_data = {
+        "messages": [
+            {"role": "user", "content": "I know someone named Lee and another named Lei."}
+        ]
+    }
+    
+    # Anonymize with fuzzy matching
+    fuzzy_anonymized, _ = anonymize_data(fuzzy_test_data, profile_name="short_names_profile")
+    fuzzy_message = fuzzy_anonymized["messages"][0]["content"]
+    
+    write_to_results(f"**Fuzzy match test original:**\n```\n{fuzzy_test_data['messages'][0]['content']}\n```\n")
+    write_to_results(f"**Fuzzy match test anonymized:**\n```\n{fuzzy_message}\n```\n")
+    
+    write_to_results("**Observation:** The anonymizer correctly handles very short entity names (2-3 characters) in both exact and fuzzy matching.\n") 

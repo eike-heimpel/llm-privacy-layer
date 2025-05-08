@@ -7,10 +7,46 @@ class AnonymizerConfig:
     """Simple configuration class for the anonymizer."""
     
     def __init__(self):
+        # Basic configuration
         self.profile_path = os.path.join("app", "config", "profiles.yaml")
         self.default_profile = "default"
         self.cache_mappings = True
         self.cache_ttl = 3600  # 1 hour
+        
+        # Entity mapping storage configuration
+        # Maximum number of mapping sets to keep in memory - controls memory usage
+        # Higher values allow more concurrent anonymization operations but use more memory
+        self.mapping_store_max_size = 100
+        
+        # Entity matching configuration
+        # Minimum length for an entity to be considered in fuzzy matching
+        # Lower values (like 2) allow matching very short names like "Jo" or "Li" but may increase false positives
+        self.min_entity_length = 2
+        
+        # Maximum number of words to consider in phrase matching
+        # Higher values allow matching of longer phrases but increase processing time
+        self.max_phrase_words = 5
+        
+        # UUID validation parameters used to detect and skip UUIDs during processing
+        self.uuid_length = 36      # Standard UUID string length
+        self.uuid_dash_count = 4   # Number of dashes in a standard UUID
+        
+        # Default entity detection thresholds (moved from core.py)
+        # Values are confidence scores between 0 and 1
+        # Higher values = stricter matching (fewer false positives but may miss some entities)
+        # Lower values = broader matching (catches more potential entities but more false positives)
+        self.default_thresholds = {
+            "PERSON": 0.85,         # Person names
+            "EMAIL_ADDRESS": 0.75,  # Email addresses
+            "PHONE_NUMBER": 0.75,   # Phone numbers
+            "LOCATION": 0.90,       # Location names, addresses
+            "DATE_TIME": 0.95,      # Dates and times
+            "NRP": 0.85,            # Numeric Recognition Patterns
+            "IP_ADDRESS": 0.75,     # IP addresses
+            "DOMAIN_NAME": 0.80,    # Domain names
+            "URL": 0.80,            # Web URLs
+            "DEFAULT": 0.85         # Default threshold for other entity types
+        }
         
         # Load from environment if present
         if os.environ.get("LLM_PRIVACY_PROFILE_PATH"):
@@ -27,6 +63,25 @@ class AnonymizerConfig:
                 self.cache_ttl = int(os.environ.get("LLM_PRIVACY_CACHE_TTL"))
             except ValueError:
                 logger.warning(f"Invalid cache TTL in environment: {os.environ.get('LLM_PRIVACY_CACHE_TTL')}")
+        
+        # Advanced configuration options
+        if os.environ.get("LLM_PRIVACY_MAPPING_STORE_SIZE"):
+            try:
+                self.mapping_store_max_size = int(os.environ.get("LLM_PRIVACY_MAPPING_STORE_SIZE"))
+            except ValueError:
+                logger.warning(f"Invalid mapping store size: {os.environ.get('LLM_PRIVACY_MAPPING_STORE_SIZE')}")
+                
+        if os.environ.get("LLM_PRIVACY_MIN_ENTITY_LENGTH"):
+            try:
+                self.min_entity_length = int(os.environ.get("LLM_PRIVACY_MIN_ENTITY_LENGTH"))
+            except ValueError:
+                logger.warning(f"Invalid min entity length: {os.environ.get('LLM_PRIVACY_MIN_ENTITY_LENGTH')}")
+                
+        if os.environ.get("LLM_PRIVACY_MAX_PHRASE_WORDS"):
+            try:
+                self.max_phrase_words = int(os.environ.get("LLM_PRIVACY_MAX_PHRASE_WORDS"))
+            except ValueError:
+                logger.warning(f"Invalid max phrase words: {os.environ.get('LLM_PRIVACY_MAX_PHRASE_WORDS')}")
                 
         # For backward compatibility, also check old environment variable names
         if os.environ.get("PRIVACY_CONTAINER_PROFILE_PATH"):
